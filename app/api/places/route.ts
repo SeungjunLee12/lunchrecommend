@@ -107,6 +107,7 @@ const getMockRestaurants = (type: string, minRating = 0, radius = 1000, isKorea 
       korean_restaurant: "한식",
       japanese_restaurant: "일식",
       chinese_restaurant: "중식",
+      western_restaurant: "양식",
       cafe: "카페",
     }
     const targetCategory = categoryMap[type]
@@ -171,6 +172,7 @@ async function searchNaverPlaces(
     korean_restaurant: "한식",
     japanese_restaurant: "일식",
     chinese_restaurant: "중식",
+    western_restaurant: "양식",
     cafe: "카페",
     restaurant: "음식점", // 일반 음식점
     all: "맛집", // 전체 검색

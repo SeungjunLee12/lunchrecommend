@@ -74,7 +74,7 @@ export default function Home() {
   const categories = [
     { id: "all", name: "전체", types: [] },
     { id: "korean", name: "한식", types: ["korean_restaurant"] },
-    { id: "western", name: "양식", types: ["restaurant"] },
+    { id: "western", name: "양식", types: ["western_restaurant"] }, // Google Places의 'western_restaurant' 타입을 사용하여 양식만 검색
     { id: "japanese", name: "일식", types: ["japanese_restaurant"] },
     { id: "chinese", name: "중식", types: ["chinese_restaurant"] },
     { id: "cafe", name: "카페", types: ["cafe"] },
