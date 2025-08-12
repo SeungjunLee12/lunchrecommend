@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/components/ui/input" // Input 컴포넌트 추가
 import { Loader2, MapPin, Shuffle, Search, Info, AlertTriangle, Star, ChevronLeft, Utensils } from "lucide-react"
 import { LocationButton } from "@/components/location-button"
 import { CategoryFilter } from "@/components/category-filter"
@@ -37,9 +37,6 @@ interface GeocodeResult {
 }
 
 export default function Home() {
-  // Define API_BASE_URL for Capacitor builds to point to the deployed Vercel API
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || ""
-
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [randomRestaurant, setRandomRestaurant] = useState<Restaurant | null>(null)
@@ -65,16 +62,13 @@ export default function Home() {
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
   const [locationSearchError, setLocationSearchError] = useState<string>("")
 
-  // New state for searching within results
-  const [resultsSearchQuery, setResultsSearchQuery] = useState<string>("")
-
   // Multi-step UI state
   const [currentStep, setCurrentStep] = useState<Step>("location")
 
   const categories = [
     { id: "all", name: "전체", types: [] },
     { id: "korean", name: "한식", types: ["korean_restaurant"] },
-    { id: "western", name: "양식", types: ["western_restaurant"] }, // Google Places의 'western_restaurant' 타입을 사용하여 양식만 검색
+    { id: "western", name: "양식", types: ["restaurant"] },
     { id: "japanese", name: "일식", types: ["japanese_restaurant"] },
     { id: "chinese", name: "중식", types: ["chinese_restaurant"] },
     { id: "cafe", name: "카페", types: ["cafe"] },
@@ -109,7 +103,6 @@ export default function Home() {
       setRestaurants([]) // 결과 화면에서 뒤로 가면 리스트 초기화
       setRandomRestaurant(null)
       setHasSearched(false)
-      setResultsSearchQuery("") // 결과 내 검색어 초기화
     }
   }
 
@@ -121,13 +114,12 @@ export default function Home() {
       setRestaurants([])
       setRandomRestaurant(null)
       setHasSearched(false)
-      setResultsSearchQuery("") // 결과 내 검색어 초기화
     }
     // If navigating back to location, re-fetch address if location is already set
     if (step === "location" && location && !displayAddress) {
       setAddressLoading(true)
       try {
-        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+        const response = await fetch(`/api/geocode`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(location),
@@ -172,7 +164,7 @@ export default function Home() {
 
     // Otherwise, fetch address from lat/lng (for current location button)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+      const response = await fetch(`/api/geocode`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newLocation),
@@ -207,7 +199,7 @@ export default function Home() {
     setLocationSearchError("")
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+      const response = await fetch(`/api/geocode`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: locationSearchQuery }),
@@ -260,12 +252,10 @@ export default function Home() {
     setMessage("")
     setDebugInfo("")
     setSortOrder("rating_desc") // 검색 시 기본 정렬 순서로 초기화
-    setResultsSearchQuery("") // 새로운 검색 시 결과 내 검색어 초기화
 
     try {
       const category = categories.find((c) => c.id === selectedCategory)
-      const keyword = category && category.id !== "all" ? category.name : undefined
-      const response = await fetch(`${API_BASE_URL}/api/places`, {
+      const response = await fetch("/api/places", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -273,8 +263,7 @@ export default function Home() {
         body: JSON.stringify({
           location: location,
           radius: selectedDistance,
-          type: "restaurant",
-          keyword,
+          type: category?.types[0] || "restaurant",
           minRating: selectedRating,
         }),
       })
@@ -365,54 +354,33 @@ export default function Home() {
       setRestaurants([])
       setRandomRestaurant(null)
       setHasSearched(false) // 초기화 후 hasSearched를 다시 false로 설정
-      setResultsSearchQuery("") // 결과 내 검색어 초기화
       console.log("Search results cleared due to filter change.")
     }
   }, [selectedCategory, selectedRating, selectedDistance])
 
-  // Memoized sorted and filtered restaurants based on sortOrder and resultsSearchQuery
-  const filteredAndSortedRestaurants = useMemo(() => {
+  // Memoized sorted restaurants based on sortOrder
+  const sortedRestaurants = useMemo(() => {
     if (!restaurants || restaurants.length === 0) {
       return []
     }
 
-    let currentResults = [...restaurants]
+    const sortableRestaurants = [...restaurants]
 
-    // 1. Filter by resultsSearchQuery
-    if (resultsSearchQuery.trim()) {
-      const lowerCaseQuery = resultsSearchQuery.trim().toLowerCase()
-      currentResults = currentResults.filter(
-        (restaurant) =>
-          restaurant.name.toLowerCase().includes(lowerCaseQuery) ||
-          restaurant.vicinity.toLowerCase().includes(lowerCaseQuery),
-      )
-    }
-
-    // 2. Sort
     if (sortOrder === "rating_desc") {
-      currentResults.sort((a, b) => {
+      sortableRestaurants.sort((a, b) => {
         const ratingA = a.rating ?? -1
         const ratingB = b.rating ?? -1
         return ratingB - ratingA
       })
     } else if (sortOrder === "distance_asc") {
-      currentResults.sort((a, b) => {
+      sortableRestaurants.sort((a, b) => {
         const distA = a.distance_meters ?? Number.POSITIVE_INFINITY
         const distB = b.distance_meters ?? Number.POSITIVE_INFINITY
         return distA - distB
       })
     }
-    return currentResults
-  }, [restaurants, sortOrder, resultsSearchQuery])
-
-  // Function to search the current resultsSearchQuery on Naver Map
-  const handleSearchKeywordOnNaverMap = () => {
-    if (resultsSearchQuery.trim()) {
-      const naverMapQuery = encodeURIComponent(resultsSearchQuery.trim())
-      const naverMapUrl = `https://map.naver.com/v5/search/${naverMapQuery}`
-      window.open(naverMapUrl, "_blank", "width=1200,height=800,scrollbars=yes,resizable=yes")
-    }
-  }
+    return sortableRestaurants
+  }, [restaurants, sortOrder])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50">
@@ -687,7 +655,7 @@ export default function Home() {
         )}
 
         {/* Results Section */}
-        {currentStep === "results" && (
+        {currentStep === "results" && restaurants.length > 0 && (
           <>
             <div className="mb-8">
               <div className="text-center mb-4">
@@ -716,7 +684,7 @@ export default function Home() {
 
             <div>
               <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
-                주변 맛집 ({filteredAndSortedRestaurants.length}곳)
+                주변 맛집 ({restaurants.length}곳)
                 <div className="text-sm text-gray-500 mt-1">
                   {categories.find((c) => c.id === selectedCategory)?.name}
                   {selectedRating > 0 && ` • ${selectedRating}★ 이상`}
@@ -724,25 +692,6 @@ export default function Home() {
                   {countryInfo && ` • ${getRatingSourceInfo()}`}
                 </div>
               </h2>
-              {/* Results Search Input */}
-              <div className="flex w-full max-w-md items-center space-x-2 mx-auto mb-4">
-                <Input
-                  type="text"
-                  placeholder="결과 내에서 검색 (예: 김밥, 카페)"
-                  value={resultsSearchQuery}
-                  onChange={(e) => setResultsSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      // Enter 키를 눌러도 필터링이 바로 적용되므로 별도 함수 호출 불필요
-                    }
-                  }}
-                />
-                <Button variant="outline" onClick={() => setResultsSearchQuery("")}>
-                  <Search className="h-4 w-4" />
-                  <span className="sr-only">검색 초기화</span>
-                </Button>
-              </div>
-
               {/* Sorting Controls */}
               <div className="flex justify-center gap-2 mb-4">
                 <Button
@@ -762,46 +711,11 @@ export default function Home() {
                   <MapPin className="w-4 h-4 mr-1" /> 가까운순
                 </Button>
               </div>
-              {filteredAndSortedRestaurants.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredAndSortedRestaurants.map((restaurant) => (
-                    <RestaurantCard key={restaurant.place_id} restaurant={restaurant} />
-                  ))}
-                </div>
-              ) : (
-                <Card className="text-center py-12">
-                  <CardContent>
-                    <div className="text-6xl mb-4">🔍</div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                      {resultsSearchQuery.trim() ? "검색 결과가 없습니다" : "조건에 맞는 맛집이 없습니다"}
-                    </h3>
-                    <p className="text-gray-500">
-                      {resultsSearchQuery.trim()
-                        ? "입력하신 키워드에 맞는 맛집을 찾을 수 없습니다."
-                        : `현재 설정된 조건(${getDistanceLabel(selectedDistance)} 이내의 ${selectedRating > 0 ? `${selectedRating}★ 이상 ` : ""}${categories.find((c) => c.id === selectedCategory)?.name} 맛집)에 맞는 결과를 찾을 수 없습니다.`}
-                    </p>
-                    <p className="text-gray-400 text-sm mt-2">
-                      {resultsSearchQuery.trim()
-                        ? "다른 키워드로 검색하거나 검색 필드를 초기화해보세요."
-                        : "검색 거리를 늘리거나 다른 조건을 선택해보세요."}
-                    </p>
-                    {/* New: Dynamic keyword search suggestion */}
-                    {resultsSearchQuery.trim() && (
-                      <div className="mt-6">
-                        <p className="text-gray-600 mb-3">혹시 주변 '{resultsSearchQuery.trim()}'을(를) 찾으시나요?</p>
-                        <Button
-                          onClick={handleSearchKeywordOnNaverMap}
-                          variant="outline"
-                          className="bg-blue-500 hover:bg-blue-600 text-white"
-                        >
-                          <Search className="mr-2 h-4 w-4" />
-                          주변 '{resultsSearchQuery.trim()}' 검색
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {sortedRestaurants.map((restaurant) => (
+                  <RestaurantCard key={restaurant.place_id} restaurant={restaurant} />
+                ))}
+              </div>
             </div>
             {/* Back to Search Button */}
             <div className="text-center mt-8">

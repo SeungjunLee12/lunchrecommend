@@ -67,12 +67,16 @@ export function RestaurantCard({ restaurant, isRecommended = false }: Restaurant
   }
 
   const handleRestaurantClick = () => {
-    // 네이버 길찾기 페이지로 연결
-    // 오직 식당 이름만으로 검색 쿼리 생성
-    const naverMapQuery = encodeURIComponent(restaurant.name)
-    const naverMapUrl = `https://map.naver.com/v5/search/${naverMapQuery}`
+    const searchQuery = encodeURIComponent(`${restaurant.name} ${restaurant.vicinity}`)
 
-    window.open(naverMapUrl, "_blank", "width=1200,height=800,scrollbars=yes,resizable=yes")
+    // 한국이면 네이버 검색, 해외면 구글 검색
+    const searchUrl =
+      restaurant.rating_source === "naver"
+        ? `https://search.naver.com/search.naver?query=${searchQuery}`
+        : `https://www.google.com/search?q=${searchQuery}`
+
+    // 새 창으로 검색 결과 열기
+    window.open(searchUrl, "_blank", "width=1200,height=800,scrollbars=yes,resizable=yes")
   }
 
   return (
@@ -134,8 +138,10 @@ export function RestaurantCard({ restaurant, isRecommended = false }: Restaurant
         </div>
         {/* Click hint */}
         <div className="text-xs text-gray-400 text-center mt-2 flex items-center justify-center gap-1">
-          <span>🗺️</span>
-          <span>클릭하면 네이버 지도에서 상세 정보를 확인할 수 있습니다</span>
+          <span>🔍</span>
+          <span>
+            클릭하면 {restaurant.rating_source === "naver" ? "네이버" : "구글"}에서 상세 정보를 확인할 수 있습니다
+          </span>
         </div>
       </CardContent>
     </Card>

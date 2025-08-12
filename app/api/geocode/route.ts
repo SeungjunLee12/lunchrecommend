@@ -75,16 +75,21 @@ export async function POST(request: NextRequest) {
 
         const data = await response.json()
 
-        // --- 디버깅을 위한 Google API 응답 전체 로깅 ---
-        console.log("Google Geocoding API raw results:", JSON.stringify(data.results, null, 2))
-        // --- 디버깅 끝 ---
-
         if (data.results && data.results.length > 0) {
-          // Google이 반환하는 첫 번째 결과를 기본으로 사용
-          const targetResult = data.results[0]
-
-          // 디버깅을 위해 최종 선택된 결과 로깅
-          console.log("Selected targetResult formatted_address:", targetResult?.formatted_address)
+          // 가장 적합한 결과 찾기 (도로명 주소 우선)
+          let targetResult = data.results.find(
+            (result: any) => result.types.includes("street_address") || result.types.includes("premise"),
+          )
+          if (!targetResult) {
+            // 도로명 주소가 없으면 sublocality_level_1 (동) 또는 political (구/시) 포함 결과 찾기
+            targetResult = data.results.find(
+              (result: any) => result.types.includes("sublocality_level_1") || result.types.includes("political"),
+            )
+          }
+          if (!targetResult) {
+            // 그래도 없으면 첫 번째 결과 사용
+            targetResult = data.results[0]
+          }
 
           const addressComponents = targetResult.address_components
 
@@ -118,11 +123,17 @@ export async function POST(request: NextRequest) {
             addressParts.push(city)
           }
 
-          // **핵심 변경: 동/읍/면 (sublocalityLevel1)을 구/군 (district)보다 먼저 추가**
-          if (sublocalityLevel1) {
+          // 구/군 또는 동/읍/면 중 더 상세한 정보 사용
+          // district와 sublocalityLevel1이 모두 있으면 둘 다 사용 (예: 강남구 역삼동)
+          if (district && sublocalityLevel1) {
+            addressParts.push(district)
             addressParts.push(sublocalityLevel1)
           } else if (district) {
+            // district만 있으면 district 사용 (예: 송파구)
             addressParts.push(district)
+          } else if (sublocalityLevel1) {
+            // sublocalityLevel1만 있으면 sublocalityLevel1 사용 (예: 역삼동)
+            addressParts.push(sublocalityLevel1)
           }
 
           // 도로명 주소 추가 (도로명 + 건물번호)
