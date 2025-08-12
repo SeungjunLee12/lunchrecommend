@@ -164,6 +164,7 @@ async function searchNaverPlaces(
   minRating: number,
   clientId: string,
   clientSecret: string,
+  keyword?: string,
 ) {
   const NAVER_API_URL = "https://openapi.naver.com/v1/search/local.json"
 
@@ -177,7 +178,7 @@ async function searchNaverPlaces(
     restaurant: "음식점", // 일반 음식점
     all: "맛집", // 전체 검색
   }
-  const searchKeyword = categoryKeywords[type] || "맛집"
+  const searchKeyword = keyword || categoryKeywords[type] || "맛집"
 
   const fullQuery = `${searchKeyword} ${query}`
 
@@ -271,7 +272,8 @@ async function searchNaverPlaces(
 
 export async function POST(request: NextRequest) {
   try {
-    const { location, radius = 1000, type = "restaurant", minRating = 0 } = await request.json()
+    const { location, radius = 1000, minRating = 0, keyword } = await request.json()
+    const type = "restaurant"
 
     if (!location || !location.lat || !location.lng) {
       return NextResponse.json({ error: "위치 정보가 필요합니다." }, { status: 400 })
@@ -325,6 +327,7 @@ export async function POST(request: NextRequest) {
           minRating,
           NAVER_SEARCH_CLIENT_ID,
           NAVER_SEARCH_CLIENT_SECRET,
+          keyword,
         )
 
         allResults = naverResults
@@ -357,7 +360,8 @@ export async function POST(request: NextRequest) {
           const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json")
           url.searchParams.append("location", `${location.lat},${location.lng}`)
           url.searchParams.append("radius", radius.toString())
-          url.searchParams.append("type", type) // 요청된 type을 Google API에 전달
+          url.searchParams.append("type", type) // 항상 restaurant 타입 사용
+          if (keyword) url.searchParams.append("keyword", keyword)
           url.searchParams.append("key", GOOGLE_PLACES_API_KEY)
           url.searchParams.append("language", "ko")
 
@@ -365,7 +369,7 @@ export async function POST(request: NextRequest) {
             url.searchParams.append("pagetoken", nextPageToken)
           }
 
-          console.log(`Using Google Places API (Page ${pageCount + 1}) with radius: ${radius}m, type: ${type}`)
+          console.log(`Using Google Places API (Page ${pageCount + 1}) with radius: ${radius}m, type: ${type}, keyword: ${keyword || ""}`)
           const response = await fetch(url.toString())
 
           if (!response.ok) {
@@ -417,16 +421,12 @@ export async function POST(request: NextRequest) {
       // 여기서는 추가적인 거리 계산 없이 그대로 사용
     }
 
-    // 2차 필터링: 요청된 'type'과 정확히 일치하는 장소만 남기기 (Google API 결과에만 해당)
-    if (apiUsed === "GOOGLE" && type && type !== "all") {
+    // 2차 필터링: keyword가 있을 경우 이름이나 주소에 keyword가 포함된 장소만 남기기 (Google API 결과에만 해당)
+    if (apiUsed === "GOOGLE" && keyword) {
       finalResults = finalResults.filter((restaurant: any) => {
-        if (!restaurant.types || !Array.isArray(restaurant.types)) {
-          return false
-        }
-        if (type === "restaurant") {
-          return restaurant.types.includes("restaurant")
-        }
-        return restaurant.types.includes(type)
+        const nameMatch = restaurant.name && restaurant.name.includes(keyword)
+        const vicinityMatch = restaurant.vicinity && restaurant.vicinity.includes(keyword)
+        return nameMatch || vicinityMatch
       })
     }
 
