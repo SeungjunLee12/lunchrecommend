@@ -264,6 +264,7 @@ export default function Home() {
 
     try {
       const category = categories.find((c) => c.id === selectedCategory)
+      const keyword = category && category.id !== "all" ? category.name : undefined
       const response = await fetch(`${API_BASE_URL}/api/places`, {
         method: "POST",
         headers: {
@@ -272,7 +273,8 @@ export default function Home() {
         body: JSON.stringify({
           location: location,
           radius: selectedDistance,
-          type: category?.types[0] || "restaurant",
+          type: "restaurant",
+          keyword,
           minRating: selectedRating,
         }),
       })
